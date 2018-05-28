@@ -55,7 +55,7 @@ bool UpdaterClass::begin(size_t size, int command) {
     _setError(UPDATE_ERROR_BOOTSTRAP);
     return false;
   }
-  
+
 #ifdef DEBUG_UPDATER
   if (command == U_SPIFFS) {
     DEBUG_UPDATER.println(F("[begin] Update SPIFFS."));
@@ -96,7 +96,7 @@ bool UpdaterClass::begin(size_t size, int command) {
 
     //make sure that the size of both sketches is less than the total space (updateEndAddress)
     if(updateStartAddress < currentSketchSize) {
-      _setError(UPDATE_ERROR_SPACE);    
+      _setError(UPDATE_ERROR_SPACE);
       return false;
     }
   }
@@ -130,6 +130,9 @@ bool UpdaterClass::begin(size_t size, int command) {
 #endif
 
   _md5.begin();
+
+  _sha = new Sha256();
+
   return true;
 }
 
@@ -139,6 +142,15 @@ bool UpdaterClass::setMD5(const char * expected_md5){
     return false;
   }
   _target_md5 = expected_md5;
+  return true;
+}
+
+bool UpdaterClass::setHash(const char *expected_sha){
+  if (strlen(expected_sha) != 64)
+  {
+    return false;
+  }
+  _target_sha = expected_sha;
   return true;
 }
 
@@ -164,6 +176,21 @@ bool UpdaterClass::end(bool evenIfRemaining){
       _writeBuffer();
     }
     _size = progress();
+  }
+
+  static uint8_t obuf[512] = {0};
+  _sha.final(obuf);
+  delete _sha;
+  char shaHash[2 * SHA256_BLOCK_SIZE + 1];
+  for (int i = 0; i < SHA256_BLOCK_SIZE; ++i) {
+     sprintf(shaHash + 2 * i, "%02X", obuf[i]);
+  }
+  if (_target_sha.length()) {
+    if (_target_md5 != String(shaHash)) {
+      _setError(UPDATE_ERROR_SHA);
+      _reset();
+      return false;
+    }
   }
 
   _md5.calculate();
@@ -210,7 +237,7 @@ bool UpdaterClass::_writeBuffer(){
     if(!_async) yield();
     eraseResult = ESP.flashEraseSector(_currentAddress/FLASH_SECTOR_SIZE);
   }
-  
+
   if (eraseResult) {
     if(!_async) yield();
     writeResult = ESP.flashWrite(_currentAddress, (uint32_t*) _buffer, _bufferLen);
@@ -226,6 +253,7 @@ bool UpdaterClass::_writeBuffer(){
     return false;
   }
   _md5.add(_buffer, _bufferLen);
+  _sha.update(_buffer, _bufferLen);
   _currentAddress += _bufferLen;
   _bufferLen = 0;
   return true;
@@ -288,14 +316,14 @@ bool UpdaterClass::_verifyEnd() {
         uint8_t buf[4];
         if(!ESP.flashRead(_startAddress, (uint32_t *) &buf[0], 4)) {
             _currentAddress = (_startAddress);
-            _setError(UPDATE_ERROR_READ);            
+            _setError(UPDATE_ERROR_READ);
             return false;
         }
 
         // check for valid first magic byte
         if(buf[0] != 0xE9) {
             _currentAddress = (_startAddress);
-            _setError(UPDATE_ERROR_MAGIC_BYTE);            
+            _setError(UPDATE_ERROR_MAGIC_BYTE);
             return false;
         }
 
@@ -304,7 +332,7 @@ bool UpdaterClass::_verifyEnd() {
         // check if new bin fits to SPI flash
         if(bin_flash_size > ESP.getFlashChipRealSize()) {
             _currentAddress = (_startAddress);
-            _setError(UPDATE_ERROR_NEW_FLASH_CONFIG);            
+            _setError(UPDATE_ERROR_NEW_FLASH_CONFIG);
             return false;
         }
 
@@ -377,6 +405,9 @@ void UpdaterClass::printError(Print &out){
   } else if(_error == UPDATE_ERROR_MD5){
     //out.println(F("MD5 Check Failed"));
     out.printf("MD5 Failed: expected:%s, calculated:%s\n", _target_md5.c_str(), _md5.toString().c_str());
+  } else if(_error == UPDATE_ERROR_HASH){
+      //out.println(F("SHA Check Failed"));
+      out.printf("SHA Failed: expected:%s, calculated:%s\n", _target_sha.c_str(), _sha.toString().c_str());
   } else if(_error == UPDATE_ERROR_FLASH_CONFIG){
     out.printf_P(PSTR("Flash config wrong real: %d IDE: %d\n"), ESP.getFlashChipRealSize(), ESP.getFlashChipSize());
   } else if(_error == UPDATE_ERROR_NEW_FLASH_CONFIG){

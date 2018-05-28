@@ -176,6 +176,8 @@ String ESP8266HTTPUpdate::getLastErrorString(void)
         return F("Wrong HTTP Code");
     case HTTP_UE_SERVER_FAULTY_MD5:
         return F("Wrong MD5");
+    case HTTP_UE_SERVER_FAULTY_HASH:
+        return F("Wrong MD5 or SHA-256 Hash");
     case HTTP_UE_BIN_VERIFY_HEADER_FAILED:
         return F("Verify Bin Header Failed");
     case HTTP_UE_BIN_FOR_WRONG_FLASH:
@@ -370,11 +372,22 @@ HTTPUpdateResult ESP8266HTTPUpdate::handleUpdate(HTTPClient& http, const String&
  * write Update to flash
  * @param in Stream&
  * @param size uint32_t
- * @param md5 String
+ * @param hash MD5 or SHA-256 String
  * @return true if Update ok
  */
-bool ESP8266HTTPUpdate::runUpdate(Stream& in, uint32_t size, String md5, int command)
+bool ESP8266HTTPUpdate::runUpdate(Stream& in, uint32_t size, String hash, int command)
 {
+
+    String md5 = "";
+    String sha256 = "";
+
+    if (hash.length() == 64) {
+      sha256 = hash;
+    }
+
+    if (hash.length() == 32) {
+      md5 = hash;
+    }
 
     StreamString error;
 
@@ -390,6 +403,14 @@ bool ESP8266HTTPUpdate::runUpdate(Stream& in, uint32_t size, String md5, int com
         if(!Update.setMD5(md5.c_str())) {
             _lastError = HTTP_UE_SERVER_FAULTY_MD5;
             DEBUG_HTTP_UPDATE("[httpUpdate] Update.setMD5 failed! (%s)\n", md5.c_str());
+            return false;
+        }
+    }
+
+    if(sha.length()) {
+        if(!Update.setHash(sha.c_str())) {
+            _lastError = HTTP_UE_SERVER_FAULTY_HASH;
+            DEBUG_HTTP_UPDATE("[httpUpdate] Update.setHash failed! (%s)\n", sha.c_str());
             return false;
         }
     }

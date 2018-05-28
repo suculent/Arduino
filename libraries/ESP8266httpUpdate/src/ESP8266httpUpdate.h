@@ -51,6 +51,7 @@
 #define HTTP_UE_SERVER_FAULTY_MD5           (-105)
 #define HTTP_UE_BIN_VERIFY_HEADER_FAILED    (-106)
 #define HTTP_UE_BIN_FOR_WRONG_FLASH         (-107)
+#define HTTP_UE_SERVER_FAULTY_HASH          (-108)
 
 enum HTTPUpdateResult {
     HTTP_UPDATE_FAILED,
@@ -105,7 +106,7 @@ public:
 
 protected:
     t_httpUpdate_return handleUpdate(HTTPClient& http, const String& currentVersion, bool spiffs = false);
-    bool runUpdate(Stream& in, uint32_t size, String md5, int command = U_FLASH);
+    bool runUpdate(Stream& in, uint32_t size, String hash, int command = U_FLASH);
 
     int _lastError;
     bool _rebootOnUpdate = true;

@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <flash_utils.h>
 #include <MD5Builder.h>
+#include <sha256.h>
 
 #define UPDATE_ERROR_OK                 (0)
 #define UPDATE_ERROR_WRITE              (1)
@@ -17,6 +18,7 @@
 #define UPDATE_ERROR_NEW_FLASH_CONFIG   (9)
 #define UPDATE_ERROR_MAGIC_BYTE         (10)
 #define UPDATE_ERROR_BOOTSTRAP          (11)
+#define UPDATE_ERROR_SHA                (12)
 
 #define U_FLASH   0
 #define U_SPIFFS  100
@@ -89,6 +91,21 @@ class UpdaterClass {
     */
     void md5(uint8_t * result){ return _md5.getBytes(result); }
 
+    /*
+      sets the expected SHA for the firmware (hexString)
+    */
+    bool setHash(const char * expected_sha);
+
+    /*
+      returns the SHA String of the sucessfully ended firmware
+    */
+    String shaString(void){ return _sha.toString(); }
+
+    /*
+      populated the result with the SHA bytes of the sucessfully ended firmware
+    */
+    void sha(uint8_t * result){ return _sha.getBytes(result); }
+
     //Helpers
     uint8_t getError(){ return _error; }
     void clearError(){ _error = UPDATE_ERROR_OK; }
@@ -148,7 +165,7 @@ class UpdaterClass {
     bool _verifyHeader(uint8_t data);
     bool _verifyEnd();
 
-    void _setError(int error);    
+    void _setError(int error);
 
     bool _async;
     uint8_t _error;
@@ -162,6 +179,9 @@ class UpdaterClass {
 
     String _target_md5;
     MD5Builder _md5;
+
+    String _target_sha;
+    Sha256 _sha;
 };
 
 extern UpdaterClass Update;
